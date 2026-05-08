@@ -848,7 +848,7 @@ function buildDrumKit(scene) {
   }));
 
   // ============================
-  // SNARE (between knees, slightly left)
+  // SNARE (between knees, slightly left, slight tilt toward player)
   // ============================
   const snareStand = makeStand(0.72);
   snareStand.position.set(-0.18, 0, -0.55);
@@ -856,6 +856,7 @@ function buildDrumKit(scene) {
   const snare = makeDrum({
     diameter: 0.36, depth: 0.14, position: new THREE.Vector3(-0.18, 0.78, -0.55)
   });
+  snare.group.rotation.x = 0.10; // ~6° tilt head toward player
   kit.add(snare.group);
   pieces.push(new DrumPiece({
     name: 'snare',
@@ -867,13 +868,13 @@ function buildDrumKit(scene) {
   }));
 
   // ============================
-  // HIGH TOM (mounted above kick, slightly left)
+  // HIGH TOM (mounted above kick, slightly left) — tilted toward player
   // ============================
   const tom1 = makeDrum({
     diameter: 0.30, depth: 0.20, position: new THREE.Vector3(-0.18, 1.05, -0.78)
   });
-  // Tilt toward player (rotate around X)
-  tom1.group.rotation.x = -0.18;
+  // Positive X rotation tips the head's far edge UP and near edge DOWN — tilts head toward drummer
+  tom1.group.rotation.x = 0.32; // ~18° toward player (rock kit ergonomics)
   kit.add(tom1.group);
   pieces.push(new DrumPiece({
     name: 'tom1',
@@ -885,12 +886,12 @@ function buildDrumKit(scene) {
   }));
 
   // ============================
-  // MID TOM (mounted above kick, slightly right)
+  // MID TOM (mounted above kick, slightly right) — tilted toward player
   // ============================
   const tom2 = makeDrum({
     diameter: 0.33, depth: 0.23, position: new THREE.Vector3(0.18, 1.04, -0.78)
   });
-  tom2.group.rotation.x = -0.18;
+  tom2.group.rotation.x = 0.32;
   kit.add(tom2.group);
   pieces.push(new DrumPiece({
     name: 'tom2',
@@ -919,6 +920,7 @@ function buildDrumKit(scene) {
   const tom3 = makeDrum({
     diameter: 0.41, depth: 0.41, position: new THREE.Vector3(0.55, 0.74, -0.55)
   });
+  tom3.group.rotation.x = 0.10; // slight tilt toward player
   kit.add(tom3.group);
   pieces.push(new DrumPiece({
     name: 'tom3',
@@ -1027,29 +1029,30 @@ function buildDrumKit(scene) {
 // =============================================================================
 class Drumstick {
   constructor() {
-    this.length = 0.38;
+    this.length = 0.40;
     this.group = new THREE.Group();
 
-    // Stick (tapered cylinder)
-    const stickGeo = new THREE.CylinderGeometry(0.008, 0.012, this.length, 12);
+    // Stick (tapered cylinder) — like a sword extending FORWARD from the hand.
+    // Cylinder default is along Y. We want it along -Z (forward) with butt at origin (grip).
+    // So: shift cylinder up by length/2 (occupies y=0..length), then rotate -90 around X
+    // (y-axis becomes -z-axis), giving us a stick from z=0 (butt at grip) to z=-length (tip).
+    const stickGeo = new THREE.CylinderGeometry(0.009, 0.014, this.length, 16);
     const stick = new THREE.Mesh(stickGeo, STICK_MAT);
     stick.castShadow = true;
-    // Pivot at the BUTT (held end). Move so butt is at group origin.
-    stick.position.y = -this.length / 2;
+    stick.position.y = this.length / 2;
     this.group.add(stick);
 
-    // Tip ball (helps see hit point)
+    // Tip ball (the business end — this is the collision/raycast point)
     const tip = new THREE.Mesh(
-      new THREE.SphereGeometry(0.012, 12, 8),
-      new THREE.MeshStandardMaterial({ color: 0xffe080, emissive: 0x886600, emissiveIntensity: 0.3 })
+      new THREE.SphereGeometry(0.014, 16, 10),
+      new THREE.MeshStandardMaterial({ color: 0xffe080, emissive: 0x886600, emissiveIntensity: 0.4 })
     );
-    tip.position.y = -this.length;
+    tip.position.y = this.length;
     this.group.add(tip);
     this.tipMesh = tip;
 
-    // Orient stick so it points "forward" out of the controller's grip
-    // Default cylinder points along Y; we want it pointing along -Z (forward) and slightly down.
-    this.group.rotation.x = -Math.PI / 2 + 0.35;
+    // Point straight forward (no extra tilt — like a sword)
+    this.group.rotation.x = -Math.PI / 2;
 
     this.tipWorldPrev = new THREE.Vector3();
     this.tipWorldCurr = new THREE.Vector3();
@@ -1114,20 +1117,21 @@ const controllerGrips = [];
 const ctrlModelFactory = new XRControllerModelFactory();
 
 for (let i = 0; i < 2; i++) {
+  // Target-ray controller — used for input events / raycasting reference
   const ctrl = renderer.xr.getController(i);
   scene.add(ctrl);
-
-  const stick = new Drumstick();
-  ctrl.add(stick.group);
-  sticks.push(stick);
-
   controllers.push(ctrl);
 
-  // Visual controller model (so the player sees their controller hand)
+  // Grip controller — where the hand actually is. Attach the stick + visual model here.
   const grip = renderer.xr.getControllerGrip(i);
   grip.add(ctrlModelFactory.createControllerModel(grip));
   scene.add(grip);
   controllerGrips.push(grip);
+
+  // Drumstick attached to the GRIP (hand), butt-end at hand, tip extending forward.
+  const stick = new Drumstick();
+  grip.add(stick.group);
+  sticks.push(stick);
 }
 
 // Track button states
